@@ -19,5 +19,5 @@ def find_perimeter(lattice,width,height,ind): # find the perimeter of a single c
                     if lattice[i,j] != lattice[nx,ny]:
                         perimeter_lattice[nx,ny] = 1
 
-    print(np.sum(perimeter_lattice == 1))
+    #print(np.sum(perimeter_lattice == 1))
     return (np.sum(perimeter_lattice == 1))

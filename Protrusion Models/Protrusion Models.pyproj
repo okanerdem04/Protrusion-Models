@@ -22,6 +22,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="calc_hamiltonian.py" />
+    <Compile Include="center_of_mass.py" />
     <Compile Include="find_perimeter.py" />
     <Compile Include="gen_lattice.py" />
     <Compile Include="main.py" />
