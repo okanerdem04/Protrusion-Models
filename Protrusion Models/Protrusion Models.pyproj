@@ -24,6 +24,7 @@
     <Compile Include="calc_hamiltonian.py" />
     <Compile Include="gen_lattice.py" />
     <Compile Include="main.py" />
+    <Compile Include="random_walks.py" />
     <Compile Include="__init__.py" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
