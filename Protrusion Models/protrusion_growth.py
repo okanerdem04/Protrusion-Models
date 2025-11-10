@@ -22,3 +22,4 @@ def center_of_mass(lattice,width,height,ind):
     com_y = (np.sum(y_lattice) / np.size(y_lattice))
 
     return [com_x, com_y]
+
