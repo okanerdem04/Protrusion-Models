@@ -11,7 +11,7 @@ import numba
 # homemade functions
 from gen_lattice import gen_lattice
 from calc_hamiltonian import calc_hamiltonian, neighbors
-from protrusion_growth import center_of_mass
+from protrusion_growth import center_of_mass, find_nearest_protrusion
 
 
 width = 100
@@ -30,6 +30,8 @@ cell_id = np.multiply(np.array(range(1,num_cells+1)),3) # cell index array
 random.shuffle(cell_id) # this is literally just done to get nicer colours
 
 lattice[45:55,45:55] = cell_id[0]
+
+lattice[40,20] = 1
 
 new_lattice = np.copy(lattice) # duplicate the old lattice, this allows a comparison later
 
@@ -83,7 +85,7 @@ for i in range(width):
         if new_lattice[i][j] != 0 and random.random() < protrusion_density and new_lattice[i][j] % 3 == 0:
             new_lattice[i][j] = new_lattice[i][j] + 1
 
-
+find_nearest_protrusion(lattice,width,height,50,30,4)
 
 fig, ax = plt.subplots()
 sns.heatmap(new_lattice,cmap=sns.color_palette("hls", (num_cells+1)*3))
