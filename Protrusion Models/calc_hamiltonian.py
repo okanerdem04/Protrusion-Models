@@ -14,7 +14,7 @@ def find_areas(lattice,cell_id,width,height,num_cells): # find the areas of all 
 
     for i in range(width): # go through each cell
         for j in range(height):
-            areas[lattice[i][j]] += 1
+            areas[lattice[i][j]//3] += 1
         
     return areas # return the value of the hamiltonian
 
@@ -31,6 +31,7 @@ def adhesion_energy(lattice,width,height,x,y): # takes the lattice, goes through
 
     return energy
 
+@numba.njit
 def calc_hamiltonian(lattice,cell_id,width,height,num_cells,a0,alpha,lambd,x,y):
     ham = 0
 
