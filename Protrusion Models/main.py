@@ -11,6 +11,7 @@ import numba
 # homemade functions
 from gen_lattice import gen_lattice
 from calc_hamiltonian import calc_hamiltonian, neighbors
+from protrusion_growth import center_of_mass
 
 
 width = 100
@@ -81,6 +82,7 @@ for i in range(width):
     for j in range(height):
         if new_lattice[i][j] != 0 and random.random() < protrusion_density and new_lattice[i][j] % 3 == 0:
             new_lattice[i][j] = new_lattice[i][j] + 1
+
 
 
 fig, ax = plt.subplots()
