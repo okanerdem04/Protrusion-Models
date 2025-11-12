@@ -14,7 +14,9 @@ def find_areas(lattice,cell_id,width,height,num_cells): # find the areas of all 
 
     for i in range(width): # go through each cell
         for j in range(height):
-            areas[lattice[i][j]//3] += 1
+            # ignore inactive protrusions
+            if lattice[i][j] % 3 != 2:
+                areas[lattice[i][j]//3] += 1
         
     return areas # return the value of the hamiltonian
 

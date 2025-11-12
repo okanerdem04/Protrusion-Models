@@ -11,15 +11,15 @@ import numba
 # homemade functions
 from gen_lattice import gen_lattice
 from calc_hamiltonian import calc_hamiltonian, neighbors
-from protrusion_growth import center_of_mass, find_nearest_protrusion
+from protrusion_growth import center_of_mass, find_nearest_protrusion, protrusion_growth
 
 
-width = 100
-height = 100
-num_cells = 1
+width = 200
+height = 200
+num_cells = 5
 target_area = 100
 alpha = 1
-lambd = 3
+lambd = 5
 
 # temperature coefficient for the likelihood of a protrusion point forming (1 is guaranteed, 0 is never)
 protrusion_density = 0.2
@@ -30,8 +30,11 @@ cell_id = np.multiply(np.array(range(1,num_cells+1)),3) # cell index array
 random.shuffle(cell_id) # this is literally just done to get nicer colours
 
 lattice[45:55,45:55] = cell_id[0]
+lattice[45:55,145:155] = cell_id[1]
+lattice[145:155,45:55] = cell_id[2]
+lattice[145:155,145:155] = cell_id[3]
+lattice[95:105,95:105] = cell_id[4]
 
-lattice[40,20] = 1
 
 new_lattice = np.copy(lattice) # duplicate the old lattice, this allows a comparison later
 
@@ -74,7 +77,23 @@ def run_mc(total_sweeps):
                     new_lattice[x,y] = original # this reverts changes to the lattice
                     print("change reverted")
 
+        # now check if the selected cell is a protrusion point
+        if new_lattice[Nx,Ny]%3 == 1 and new_lattice[Nx,Ny]//3 != 0:
+            new_protrusion_pos = protrusion_growth(new_lattice,width,height,Nx,Ny,new_lattice[Nx,Ny],10)
+            new_protrusion_x = (new_protrusion_pos[0]+Nx)%width
+            new_protrusion_y = (new_protrusion_pos[1]+Ny)%height
+
+            print(f"New protrusion at {new_protrusion_x} {new_protrusion_y}")
+
+            # make sure the new protrusion pos does not belong to the same cell or a protrusion of any kind
+            if new_lattice[new_protrusion_x,new_protrusion_y] // 3 != new_lattice[Nx,Ny]//3 and new_lattice[new_protrusion_x,new_protrusion_y] % 3 == 0:
+                new_lattice[new_protrusion_x,new_protrusion_y] = new_lattice[Nx,Ny]
+                new_lattice[Nx,Ny] = new_lattice[Nx,Ny]+1 # turn the old protrusion point to an inactive protrusion
+                print("protrusion growth")
+
         # print(i,i//sweep, (new_lattice==1).sum()) # this one line of code is really slow (probably because it calculates a remainder every single step)
+
+
 
 
 run_mc(budding_sweeps)
@@ -85,8 +104,8 @@ for i in range(width):
         if new_lattice[i][j] != 0 and random.random() < protrusion_density and new_lattice[i][j] % 3 == 0:
             new_lattice[i][j] = new_lattice[i][j] + 1
 
-find_nearest_protrusion(lattice,width,height,50,30,4)
+run_mc(protrusion_sweeps)
 
 fig, ax = plt.subplots()
-sns.heatmap(new_lattice,cmap=sns.color_palette("hls", (num_cells+1)*3))
+sns.heatmap(new_lattice,cmap=sns.color_palette("hls", 6))
 plt.show()
