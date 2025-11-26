@@ -7,61 +7,76 @@ import math
 
 from calc_hamiltonian import neighbors
 
-# find the center of mass of a cell
-def center_of_mass(lattice,width,height,ind):
+def center_of_mass(lattice,width,height,ind): # find the position of the center of mass of a given cell
+    # inputs: 2d npArray lattice, int width, int height, int ind
+
     x_lattice = np.array([]) # empty arrays to store all x, y positions
     y_lattice = np.array([]) 
     
-    # go through each element in array
+    # for each pixel in the lattice, append its indices to the x_ and y_lattices if they belong to the given cell ind
     for i in range(width):
         for j in range(height):
-            # see if the selected element matches the id of the cell we are looking for
             if lattice[i,j] == ind:
                 x_lattice = np.append(x_lattice,i)
                 y_lattice = np.append(y_lattice,j)
 
+    # calculate the sum of the x indices and y indices, divided by the total number of indices; this finds average value of both indices
     com_x = (np.sum(x_lattice) / np.size(x_lattice))
     com_y = (np.sum(y_lattice) / np.size(y_lattice))
 
+    # return the center of mass indices as a list
     return [com_x, com_y]
 
-# finds the nearest other protrusion's position
-def find_nearest_protrusion(lattice,width,height,x,y,protrusion_id):
-    found = False
-    d = 1
-    search_area = lattice[x-1:x+1,y-1:y+1].copy()
+def find_nearest_protrusion(lattice,width,height,x,y,protrusion_id): # find the indices of the closest protrusion pixel not belonging to a given id
+    # inputs: 2d npArray lattice, int width, int height, int x, int y, int protrusion_id
 
-    while found == False:
-        # get the indices of the lattice spaces in range of d, accounting for the looping nature of the lattice
-        rows = np.arange(x-d,x+d+1) % width
-        cols = np.arange(y-d,y+d+1) % height
-        selection = lattice[np.ix_(rows, cols)].copy()
+    x_ind = 0
+    y_ind = 0
+    d = 9999999
 
-        # erase all of the data for the original protrusion from the selection
-        selection[selection//3 == protrusion_id//3] = 0
-        # sum up all of the selected lattice spaces which contain a protrusion that isn't the one initially selected
-        in_range = np.count_nonzero(selection % 3 != 0)
+    # apply a mask to the original lattice to create a new lattice where all non-zero values are the indices of protrusions not belonging to the original cell
+    masked_lattice = np.zeros((width,height),dtype=int)
+    masked_lattice[lattice%3 != 0] = 1
+    masked_lattice[lattice//3 == protrusion_id // 3] = 0
 
-        if in_range > 0:
-            search_area = selection.copy()
-            found = True
-        elif d < width and d < height:
-            d += 1
-        else:
-            return [0,0]
-    
-    # for now, get the indices of a non-zero item in this lattice area - this technically may not be the closest one
-    nearest_site = np.nonzero(search_area)
 
-    nearest_x = nearest_site[0]-d
-    nearest_y = nearest_site[1]-d
+    # vectorised alternative
+    # if num_ones>0:
+    #     _x = indices[0]
+    #     _y = indices[1]
+    #     _dist =  np.sqrt((_x-x)**2+(_y-y)**2)
+    #     _which = _dist.argmin()
+    #     assert which == _which,"vectorisation didnt work"
 
-    print(f"nearest protrusion site x {nearest_x[0]} y {nearest_y[0]}, distance {d}")
-    # note this returns the relative position of the nearest protrusion, not its actual position
-    return [nearest_x[0],nearest_y[0],d]
+    # find the total number of non-zero indices and each of their x- and y-positions
+    num_ones = np.count_nonzero(masked_lattice)
+    indices = np.nonzero(masked_lattice)
 
-# model the growth of a protrusion point
-def protrusion_growth(lattice,width,height,x,y,protrusion_id,d):
+    # go through each of the indices, find the distance between them and the given x,y point
+    for i in range(num_ones):
+        xn = indices[0][i]
+        yn = indices[1][i]
+        print(xn)
+
+        dist = math.sqrt((xn-x)**2+(yn-y)**2)
+
+        # store the closest point's distance and indices, overwriting them if a closer point is found
+        if dist < d:
+            d = dist
+            x_ind = xn
+            y_ind = yn
+            # which = i
+
+    print(f"Closest point to x {x} y {y} is at {x_ind} {y_ind}")
+
+    # return the *relative* position of the nearest protrusion point and its distance
+    nearest_x = x_ind - x
+    nearest_y = y_ind - y
+    return [nearest_x,nearest_y,d] # note that if there are no other protrusion points, this returns [0,0,9999999]; large distance should prevent any errors from this
+
+def protrusion_growth(lattice,width,height,x,y,protrusion_id,d): # model the growth of a protrusion point
+    # inputs: 2d npArray lattice, int width, int height, int x, int y, int protrusion_id, int d
+
     # find the vector from the center of mass of the cell to the protrusion point
     com_pos = center_of_mass(lattice,width,height,protrusion_id-1) # protrusion_id - 1 is its respective body
     rel_com_x = x - com_pos[0]
@@ -72,17 +87,16 @@ def protrusion_growth(lattice,width,height,x,y,protrusion_id,d):
     rel_pro_x = pro_pos[0]
     rel_pro_y = pro_pos[1]
 
-    print(rel_com_x)
+    '''print(rel_com_x)
     print(rel_com_y)
     print(rel_pro_x)
-    print(rel_pro_y)
+    print(rel_pro_y)'''
 
     # if the nearest protrusion is within distance d of the protrusion point, attempt to grow towards it
     if pro_pos[2] <= d:
-        # if it's further away on the x axis than y in either direction...
+        # TODO: make this growth far more organic
         if abs(rel_pro_x) >= abs(rel_pro_y):
-            # return an x/y coordinate that is one closer to the protrusion
-            return [round(rel_pro_x/abs(rel_pro_x)),0] # dividing by the absolute value gives a normalised value, i.e. 1 or -1 depending on direction
+            return [round(rel_pro_x/abs(rel_pro_x)),0]
         else:
             return [0,round(rel_pro_y/abs(rel_pro_y))]
 
