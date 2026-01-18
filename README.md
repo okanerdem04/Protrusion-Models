@@ -1,0 +1,1 @@
+An extension of the cellular Potts model developed to study the growth of osteocyte cells and their protrusions. In its current form, the program can be run by simply executing the main.py program. There are no user inputs, so all changes must be done by editing the file itself.
