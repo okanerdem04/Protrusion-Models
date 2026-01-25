@@ -42,18 +42,29 @@ def neighbors(x, y, width, height):
     return [((x+1)%width, y), ((x-1)%width, y), (x, (y+1)%height), (x, (y-1)%height)]
 
 @numba.njit
-def adhesion_energy(lattice,width,height,x,y): # for a given lattice point [x,y], calculate how many of its neighbouring points belong to different cells
+def adhesion_energy(lattice,width,height,x,y,Jt): # for a given lattice point [x,y], calculate how many of its neighbouring points belong to different cells
     # inputs: 2d npArray lattice, int width, int height, int x, int y
     energy = 0
 
     for nx, ny in neighbors(x,y,width,height):
-        energy += (lattice[nx, ny] != lattice[x,y])
+        if lattice[nx, ny] != lattice[x,y]:
+            # if neither of them are backgrounds...
+            if lattice[nx, ny] != 0 and lattice[x,y] != 0:
+                # if the connection is between a body and protrusion, instead decrease energy by a lot
+                if (lattice[nx,ny]%3==0 and lattice[x,y]%3!=0) or (lattice[nx,ny]%3!=0 and lattice[x,y]%3==0):
+                    energy -= Jt
+                # if it is not, this is a cell-cell or protrusion-protrusion interaction, neither of which we care about yet
+                else:
+                    energy += 1
+            # otherwise, do the adhesion between background and other cells
+            else:
+                energy += 1
 
     # return the number of neighbours belonging to different cells
     return energy
 
 @numba.njit
-def calc_hamiltonian(lattice,width,height,num_cells,area_coeff,a0,adhesion_coeff,protrusion_coeff,p0,x,y): # calculate the overall Hamiltonian function of the lattice
+def calc_hamiltonian(lattice,width,height,num_cells,area_coeff,a0,adhesion_coeff,protrusion_coeff,p0,Jt,x,y): # calculate the overall Hamiltonian function of the lattice
     # inputs: 2d npArray lattice, 1d npArray cell_id, int width, int height, int num_cells, int area_coeff, int a0, int adhesion_coeff, int protrusion_coeff, int p0, int x, int y
     ham = 0
 
@@ -69,7 +80,8 @@ def calc_hamiltonian(lattice,width,height,num_cells,area_coeff,a0,adhesion_coeff
 
     # find the adhesion energy around one point, based on alpha
     # this does *not* find the total adhesion energy, as that takes much longer to calculate and we're only interested in the changes of energy when swapping one point
-    adhesion = adhesion_energy(lattice,width,height,x,y)
+    adhesion = adhesion_energy(lattice,width,height,x,y,Jt)
+    print(f"adhesion energy total {adhesion}")
     ham += adhesion_coeff*adhesion
 
     # return the total Hamiltonian of the system
