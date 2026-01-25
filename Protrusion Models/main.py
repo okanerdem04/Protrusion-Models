@@ -8,31 +8,36 @@ import random
 import seaborn as sns
 import colorcet as cc
 import numba
+from scipy.ndimage import label
+from skimage.measure import find_contours
+from matplotlib.patches import Polygon
 # homemade functions
 from gen_lattice import gen_lattice
-from calc_hamiltonian import calc_hamiltonian, neighbors
+from calc_hamiltonian import calc_hamiltonian, neighbors, find_protrusions
 from protrusion_growth import center_of_mass, find_nearest_protrusion, protrusion_growth
 
 # starting variables:
-width = 100             # width of lattice
-height = 100            # height of lattice
-num_cells = 1           # number of unique cells
-target_area = 100       # target area of the body of cells
-target_prot = 10        # target area of the protrusions of cells
-alpha = 1               # surface tension coefficient
-lambd = 5               # area constraint coefficient
+width = 200             # width of lattice
+height = 200            # height of lattice
+num_cells = 625         # number of unique cells
+target_area = 64        # target area of the body of cells
+target_prot = 400       # target area of the protrusions of cells
+alpha = 0.5               # surface tension coefficient
+lambd = 1               # area constraint coefficient
 mu = 1                  # protrusion constraint coefficient
 
 # probability for the likelihood of a cell body being replaced by a protrusion (1 is guaranteed, 0 is never)
-protrusion_density = 0.2
+protrusion_density = 0.1
 
 lattice = np.zeros((width,height),dtype=np.int64) # lattice is stored as a 2d numpy array
 cell_id = np.multiply(np.array(range(1,num_cells+1)),3) # cell index array; this stores the value of the body parts of the cells
-# random.shuffle(cell_id) # this is literally just done to get nicer colours
+random.shuffle(cell_id) # this is literally just done to get nicer colours
 
-# set up initial conditions
-lattice[45:55,45:55] = cell_id[0]
-lattice[10,10] = 1
+for i in range(25):
+    for j in range(25):
+        xpos = i*8
+        ypos = j*8
+        lattice[xpos:xpos+8,ypos:ypos+8] = cell_id[i*25+j]
 
 '''lattice[45:55,145:155] = cell_id[1]
 lattice[145:155,45:55] = cell_id[2]
@@ -44,7 +49,7 @@ new_lattice = np.copy(lattice) # duplicate the old lattice, this allows a compar
 # calculate the value for the total number of sweeps, based on the size of the lattice
 sweep = np.prod(new_lattice.shape)
 budding_sweeps = 10*sweep
-protrusion_sweeps = 50*sweep
+protrusion_sweeps = 100*sweep
 
 def run_mc(total_sweeps): # run the Monte Carlo simulation over the total number of sweeps
     for i in range(total_sweeps):
@@ -115,7 +120,12 @@ def run_mc(total_sweeps): # run the Monte Carlo simulation over the total number
                     if random.random() > prob:
                         new_lattice[Nx,Ny] = new_lattice[Nx,Ny]-1
                         new_lattice[new_protrusion_x,new_protrusion_y] = store
-                        print("max protrusion length reached")
+                        
+        # stop the Monte Carlo simulation as soon as we reach the limit of protrusions
+        num_protrusions = find_protrusions(new_lattice,width,height,num_cells)[1]
+        if num_protrusions >= target_prot:
+            print(f"Total number of inactive protrusions reached in {i/sweep} sweeps")
+            break
 
         # print(i,i//sweep, (new_lattice==1).sum()) # this one line of code is really slow (probably because it calculates a remainder every single step)
 
@@ -123,15 +133,131 @@ def run_mc(total_sweeps): # run the Monte Carlo simulation over the total number
 run_mc(budding_sweeps)
 
 # introduce protrusion points to the cells after running MC for a while
-for i in range(width):
+'''for i in range(width):
     for j in range(height):
-        if new_lattice[i][j] != 0 and random.random() < protrusion_density and new_lattice[i][j] % 3 == 0:
-            new_lattice[i][j] = new_lattice[i][j] + 1
+        if new_lattice[i][j] != 0 and new_lattice[i][j] % 3 == 0:
+            # we only want to apply protrusion points to the border of the cell, i.e. where its neighbours
+            outside = 0
+            for nx, ny in neighbors(i,j,width,height):
+                outside += (new_lattice[nx, ny] != new_lattice[i,j])
+            if random.random() < protrusion_density and outside >= 1:
+                new_lattice[i][j] = new_lattice[i][j] + 1'''
 
 # run the MC simulation again, this time with protrusion cells in the mix
-run_mc(protrusion_sweeps)
+#run_mc(protrusion_sweeps)
 
 # plot the final lattice
 fig, ax = plt.subplots()
-sns.heatmap(new_lattice,cmap=sns.color_palette("hls", 6))
+sns.heatmap(new_lattice,cmap=sns.color_palette("hls", 25),square=True,cbar=False,xticklabels=False,yticklabels=False)
+
+# All of this below code is AI-generated, details lined out in my labbook
+# It is solely for creating outlines on the heatmap to make it look nicer.
+def blocky_polygons(mask):
+    """Return polygons that follow the grid edges (no diagonals).
+
+    This builds explicit grid-edge segments for each True cell, removes
+    internal edges (shared by two cells) and then chains the remaining
+    outer edges into closed polygon rings.
+    """
+    from collections import defaultdict
+
+    polygons = []
+    labeled, num = label(mask)
+
+    for region in range(1, num + 1):
+        region_mask = (labeled == region)
+        ys, xs = np.where(region_mask)
+
+        # collect all edges as directed undirected tuples of corner points
+        edges = []
+        for y, x in zip(ys, xs):
+            # corners: (x, y), (x+1, y), (x+1, y+1), (x, y+1)
+            p0 = (x, y)
+            p1 = (x+1, y)
+            p2 = (x+1, y+1)
+            p3 = (x, y+1)
+            edges.extend([
+                (p0, p1),
+                (p1, p2),
+                (p2, p3),
+                (p3, p0),
+            ])
+
+        # count edges and keep only outer edges (appear once)
+        edge_count = {}
+        for a, b in edges:
+            key = (a, b) if a <= b else (b, a)
+            edge_count[key] = edge_count.get(key, 0) + 1
+
+        outer_edges = [e for e, cnt in edge_count.items() if cnt == 1]
+        if not outer_edges:
+            continue
+
+        # build adjacency map from outer edges
+        adj = defaultdict(list)
+        for a, b in outer_edges:
+            adj[a].append(b)
+            adj[b].append(a)
+
+        # traverse adjacency to build closed chains (polygons)
+        while adj:
+            start = next(iter(adj))
+            chain = [start]
+            current = start
+            prev = None
+
+            while True:
+                nbrs = adj.get(current, [])
+                # pick next neighbor that is not the previous vertex
+                if not nbrs:
+                    break
+                if prev is None:
+                    nxt = nbrs[0]
+                else:
+                    nxt = nbrs[0] if nbrs[0] != prev else (nbrs[1] if len(nbrs) > 1 else nbrs[0])
+
+                # remove the used edge from adjacency
+                try:
+                    adj[current].remove(nxt)
+                except ValueError:
+                    pass
+                try:
+                    adj[nxt].remove(current)
+                except ValueError:
+                    pass
+                if not adj[current]:
+                    del adj[current]
+                if not adj.get(nxt):
+                    adj.pop(nxt, None)
+
+                # append next to chain
+                chain.append(nxt)
+                prev, current = current, nxt
+
+                # closed loop?
+                if current == start:
+                    break
+
+            # convert chain of corner points to polygon points (x,y)
+            if len(chain) >= 4:
+                # ensure closed
+                if chain[0] != chain[-1]:
+                    chain.append(chain[0])
+                points = [(float(px), float(py)) for px, py in chain]
+                polygons.append(points)
+
+    return polygons
+
+# 
+for val in np.unique(new_lattice):
+    # skip background
+    if val == 0:
+        continue
+    mask = (new_lattice == val)
+    polys = blocky_polygons(mask)
+    for points in polys:
+        if len(points) < 3:
+            continue
+        poly = Polygon(points, closed=True, fill=False, edgecolor="black", linewidth=2)
+        ax.add_patch(poly)
 plt.show()
