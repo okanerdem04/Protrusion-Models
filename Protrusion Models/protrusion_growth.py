@@ -7,16 +7,16 @@ import math
 
 from calc_hamiltonian import neighbors
 
-def center_of_mass(lattice,width,height,ind): # find the position of the center of mass of a given cell
-    # inputs: 2d npArray lattice, int width, int height, int ind
+def center_of_mass(spins,compartments,width,height,ind): # find the position of the center of mass of a given cell
+    # inputs: 2d npArray lattice, int width, int height
 
     x_lattice = np.array([]) # empty arrays to store all x, y positions
     y_lattice = np.array([]) 
     
-    # for each pixel in the lattice, append its indices to the x_ and y_lattices if they belong to the given cell ind
+    # for each pixel in the lattice, append its indices to the x_ and y_lattices if they belong to the given spin and are somas
     for i in range(width):
         for j in range(height):
-            if lattice[i,j] == ind:
+            if spins[i,j] == ind and compartments[i,j] == 1:
                 x_lattice = np.append(x_lattice,i)
                 y_lattice = np.append(y_lattice,j)
 
@@ -27,18 +27,17 @@ def center_of_mass(lattice,width,height,ind): # find the position of the center 
     # return the center of mass indices as a list
     return [com_x, com_y]
 
-def find_nearest_protrusion(lattice,width,height,x,y,protrusion_id): # find the indices of the closest protrusion pixel not belonging to a given id
-    # inputs: 2d npArray lattice, int width, int height, int x, int y, int protrusion_id
+def find_nearest_protrusion(spins,compartments,width,height,x,y,ind): # find the indices of the closest protrusion pixel not belonging to a given id
+    # inputs: 2d npArray lattice, int width, int height, int x, int y, int ind
 
     x_ind = 0
     y_ind = 0
     d = 9999999
 
-    # apply a mask to the original lattice to create a new lattice where all non-zero values are the indices of protrusions not belonging to the original cell
+    # create a new lattice with 1s at all indices with protrusion tips not belonging to the selected cell's spin
     masked_lattice = np.zeros((width,height),dtype=int)
-    masked_lattice[lattice%3 != 0] = 1
-    masked_lattice[lattice//3 == protrusion_id // 3] = 0
-
+    masked_lattice[compartments == 2] = 1
+    masked_lattice[spins == ind] = 0
 
     # vectorised alternative
     # if num_ones>0:
@@ -74,16 +73,16 @@ def find_nearest_protrusion(lattice,width,height,x,y,protrusion_id): # find the 
     nearest_y = y_ind - y
     return [nearest_x,nearest_y,d] # note that if there are no other protrusion points, this returns [0,0,9999999]; large distance should prevent any errors from this
 
-def protrusion_growth(lattice,width,height,x,y,protrusion_id,d): # model the growth of a protrusion point
+def protrusion_growth(spins,compartments,width,height,x,y,d): # model the growth of a protrusion point
     # inputs: 2d npArray lattice, int width, int height, int x, int y, int protrusion_id, int d
 
     # find the vector from the center of mass of the cell to the protrusion point
-    com_pos = center_of_mass(lattice,width,height,protrusion_id-1) # protrusion_id - 1 is its respective body
+    com_pos = center_of_mass(spins,compartments,width,height,spins[x,y])
     rel_com_x = x - com_pos[0]
     rel_com_y = y - com_pos[1]
 
     # find the relative position of the nearest protrusion point
-    pro_pos = find_nearest_protrusion(lattice,width,height,x,y,protrusion_id)
+    pro_pos = find_nearest_protrusion(spins,compartments,width,height,x,y,spins[x,y])
     rel_pro_x = pro_pos[0]
     rel_pro_y = pro_pos[1]
 

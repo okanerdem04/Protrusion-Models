@@ -16,10 +16,10 @@ from protrusion_growth import center_of_mass, find_nearest_protrusion, protrusio
 # starting variables:
 width = 100             # width of lattice
 height = 100            # height of lattice
-num_cells = 1           # number of unique cells
-target_area = 400       # target area of the body of cells
-target_prot = 500        # target area of the protrusions of cells
-alpha = 1               # surface tension coefficient
+num_cells = 5           # number of unique cells
+target_area = 100       # target area of the body of cells
+target_prot = 200        # target area of the protrusions of cells
+alpha = 2               # surface tension coefficient
 lambd = 1               # area constraint coefficient
 mu = 1                  # protrusion constraint coefficient
 Jt = 1
@@ -27,22 +27,27 @@ Jt = 1
 # probability for the likelihood of a cell body being replaced by a protrusion (1 is guaranteed, 0 is never)
 protrusion_density = 0.1
 
-lattice = np.zeros((width,height),dtype=np.int64) # lattice is stored as a 2d numpy array
-cell_id = np.multiply(np.array(range(1,num_cells+1)),3) # cell index array; this stores the value of the body parts of the cells
+# create two 2d arrays to store all lattice info; one array stores each pixel's spin value, the other stores their compartment value
+spins = np.zeros((width,height),dtype=np.int64)
+compartments = np.zeros((width,height),dtype=np.int64)
+
+cell_id = np.array(range(1,num_cells+1)) # cell index array to store all unique spins
 # random.shuffle(cell_id) # this is literally just done to get nicer colours
 
-# set up initial conditions
-lattice[40:60,40:60] = cell_id[0]
-'''lattice[40:60,40:60] = cell_id[1]
-lattice[140:160,40:60] = cell_id[2]
-lattice[40:60,140:160] = cell_id[3]
-lattice[140:160,140:160] = cell_id[4]'''
+# set up initial cells on the spin array
+spins[10:20,10:20] = cell_id[0]
+spins[40:50,40:50] = cell_id[1]
+spins[80:90,80:90] = cell_id[2]
+spins[10:20,80:90] = cell_id[3]
+spins[80:90,10:20] = cell_id[4]
 
-new_lattice = np.copy(lattice) # duplicate the old lattice, this allows a comparison later (TODO: get rid of this, it serves no purpose)
-snapshot_1 = np.copy(lattice)
+
+# assigns each of the x/y coords that exist on the spin array a compartment value of 1 (body)
+for i in range(num_cells):
+    compartments[spins == cell_id[i]] = 1
 
 # calculate the value for the total number of sweeps, based on the size of the lattice
-sweep = np.prod(new_lattice.shape)
+sweep = np.prod(spins.shape)
 budding_sweeps = 0*sweep
 protrusion_sweeps = 100*sweep
 
@@ -53,18 +58,21 @@ def run_mc(total_sweeps): # run the Monte Carlo simulation over the total number
         y = random.randint(0,height-1)
 
         # store that point on the lattice in a temporary variable, also find the index of a random neighbour
-        original = new_lattice[x,y] 
+        og_spin = spins[x,y] 
+        og_compartment = compartments[x,y] 
         Nx, Ny = neighbors(x,y,width,height)[np.random.randint(0, 4)]
 
         # this section of the simulation handles the growth and energy of the cell body
-        # check to see if both selected pixels are unique cell bodies
-        if new_lattice[Nx,Ny]//3 != new_lattice[x,y]//3 and new_lattice[x,y]%3 == new_lattice[Nx,Ny]%3 == 0:
+        # check to see if both selected pixels are unique cell bodies (or the background)
+        if spins[x,y] != spins[Nx,Ny] and compartments[x,y] <= 1 and compartments[Nx,Ny] <= 1:
             # calculate a pre-change hamiltonian
-            old_ham = calc_hamiltonian(new_lattice, width, height, num_cells, lambd, target_area, alpha, mu, target_prot, Jt, x, y)
+            old_ham = calc_hamiltonian(spins, compartments, width, height, num_cells, lambd, target_area, alpha, mu, target_prot, Jt, x, y)
 
             # replace the original selected position with its neighbour, re-calculate hamiltonian
-            new_lattice[x,y] = new_lattice[Nx,Ny]
-            new_ham = calc_hamiltonian(new_lattice, width, height, num_cells, lambd, target_area, alpha, mu, target_prot, Jt, x, y)
+            spins[x,y] = spins[Nx,Ny]
+            compartments[x,y] = compartments[Nx,Ny]
+
+            new_ham = calc_hamiltonian(spins, compartments, width, height, num_cells, lambd, target_area, alpha, mu, target_prot, Jt, x, y)
 
             # find the energy change
             energy_change = new_ham - old_ham
@@ -74,51 +82,55 @@ def run_mc(total_sweeps): # run the Monte Carlo simulation over the total number
             if energy_change > 0:
                 prob = np.exp(-(energy_change))
                 if random.random() > prob:
-                    new_lattice[x,y] = original
+                    spins[x,y] = og_spin
+                    compartments[x,y] = og_compartment
                     print("change reverted")
 
         # this section of the simulation handles the growth and energy of protrusion tip
-        # check to see if the neighbouring lattice point is a protrusion tip
-        if new_lattice[Nx,Ny]%3 == 1 and new_lattice[Nx,Ny]//3 != 0:
+        # check to see if the selected lattice point is a protrusion tip
+        if compartments[x,y] == 2 and spins[x,y] != 0:
             # calculate the position of the neighbouring cell the protrusion tip wants to grow into
             # # this is either going to be towards another protrusion or away from the center of mass of the cell
-            new_protrusion_pos = protrusion_growth(new_lattice,width,height,Nx,Ny,new_lattice[Nx,Ny],10)
-            new_protrusion_x = (new_protrusion_pos[0]+Nx)%width
-            new_protrusion_y = (new_protrusion_pos[1]+Ny)%height
+            new_protrusion_pos = protrusion_growth(spins,compartments,width,height,x,y,10)
+            new_protrusion_x = (new_protrusion_pos[0]+x)%width
+            new_protrusion_y = (new_protrusion_pos[1]+y)%height
 
             print(f"New protrusion at {new_protrusion_x} {new_protrusion_y}")
 
-            # check to see that the selected neighbour does not already belong to its own cell or any other protrusions
-            if new_lattice[new_protrusion_x,new_protrusion_y] // 3 != new_lattice[Nx,Ny]//3 and new_lattice[new_protrusion_x,new_protrusion_y] % 3 == 0:
+            # check to see that the selected neighbour is a different spin and not a protrusion
+            if spins[new_protrusion_x,new_protrusion_y] != spins[x,y] and compartments[new_protrusion_x,new_protrusion_y] <= 1:
                 # find the hamiltonian prior to any changes
-                old_ham = calc_hamiltonian(new_lattice, width, height, num_cells, lambd, target_area, alpha, mu, target_prot, Jt, x, y)
+                old_ham = calc_hamiltonian(spins, compartments, width, height, num_cells, lambd, target_area, alpha, mu, target_prot, Jt, x, y)
 
-                # temporarily store the value of where the new protrusion will be
-                store = new_lattice[new_protrusion_x,new_protrusion_y]
+                # temporarily store the values of where the new protrusion will be
+                temp_spin = spins[new_protrusion_x,new_protrusion_y]
+                temp_compartment = compartments[new_protrusion_x,new_protrusion_y]
 
                 # change the selected neighbour to a protrusion tip, replace the original pixel to an inactive protrusion cell
-                new_lattice[new_protrusion_x,new_protrusion_y] = new_lattice[Nx,Ny]
-                new_lattice[Nx,Ny] = new_lattice[Nx,Ny]+1
+                spins[new_protrusion_x,new_protrusion_y] = spins[x,y]
+                compartments[new_protrusion_x,new_protrusion_y] = 2
+                compartments[x,y] = 3
 
                 # find the hamiltonian after the swap, calculate energy change
-                new_ham = calc_hamiltonian(new_lattice, width, height, num_cells, lambd, target_area, alpha, mu, target_prot, Jt, x, y)
+                new_ham = calc_hamiltonian(spins, compartments, width, height, num_cells, lambd, target_area, alpha, mu, target_prot, Jt, x, y)
                 energy_change = new_ham - old_ham
 
                 # if energy is increased, have a chance to revert protrusion growth
                 if energy_change > 0:
                     prob = np.exp(-(energy_change))
                     if random.random() > prob:
-                        new_lattice[Nx,Ny] = new_lattice[Nx,Ny]-1
-                        new_lattice[new_protrusion_x,new_protrusion_y] = store
+                        compartments[x,y] = 2
+                        spins[new_protrusion_x,new_protrusion_y] = temp_spin
+                        compartments[new_protrusion_x,new_protrusion_y] = temp_compartment
                         print("max protrusion length reached")
 
         #print(i,i//sweep, (new_lattice==1).sum()) # this one line of code is really slow (probably because it calculates a remainder every single step)
         if i == 300000:
             global snapshot_2
-            snapshot_2 = np.copy(new_lattice)
+            snapshot_2 = np.copy(spins)
         if i == 600000:
             global snapshot_3
-            snapshot_3 = np.copy(new_lattice)
+            snapshot_3 = np.copy(spins)
 
 # run the Monte Carlo simulation without any protrusion cells for a certain amount of sweeps
 run_mc(budding_sweeps)
@@ -126,15 +138,15 @@ run_mc(budding_sweeps)
 # introduce protrusion points to the cells after running MC for a while
 for i in range(width):
     for j in range(height):
-        if new_lattice[i][j] != 0 and random.random() < protrusion_density and new_lattice[i][j] % 3 == 0:
+        if spins[i][j] != 0 and random.random() < protrusion_density and compartments[i][j] == 1:
             buried = 0
             for nx, ny in neighbors(i,j,width,height):
-                buried += (new_lattice[nx][ny] != new_lattice[i][j])
+                buried += (spins[nx][ny] != spins[i][j] and compartments[nx][ny] != compartments[i][j])
             if buried != 0:
-                new_lattice[i][j] = new_lattice[i][j] + 1
+                compartments[i][j] = 2
 
 # take a snapshot of lattice after this
-snapshot_1 = np.copy(new_lattice)
+snapshot_1 = np.copy(spins)
 
 # run the MC simulation again, this time with protrusion cells in the mix
 run_mc(protrusion_sweeps)
@@ -143,25 +155,25 @@ palette = ["#ffffff", "#ffffff", "#ffffff", "#000000", "#999999", "#555555", "#0
 
 # plot the final lattice
 fig, ax = plt.subplots(2,2)
-sns.heatmap(snapshot_1,cmap=sns.color_palette(palette,18),square=True,cbar=False,ax=ax[0,0],xticklabels=False, yticklabels=False, vmin=0,vmax=18)
+sns.heatmap(snapshot_1,square=True,cbar=False,ax=ax[0,0],xticklabels=False, yticklabels=False, vmin=0,vmax=18)
 ax[0,0].annotate("a)",(10,20))
 ax[0,0].axhline(y = 0, color = '000000', linewidth = 3)
 ax[0,0].axhline(y = 200, color = '000000', linewidth = 3)
 ax[0,0].axvline(x = 0, color = '000000', linewidth = 3)
 ax[0,0].axvline(x = 200, color = '000000', linewidth = 3)
-sns.heatmap(snapshot_2,cmap=sns.color_palette(palette,18),square=True,cbar=False,ax=ax[0,1],xticklabels=False, yticklabels=False, vmin=0,vmax=18)
+sns.heatmap(snapshot_2,square=True,cbar=False,ax=ax[0,1],xticklabels=False, yticklabels=False, vmin=0,vmax=18)
 ax[0,1].annotate("b)",(10,20))
 ax[0,1].axhline(y = 0, color = '000000', linewidth = 3)
 ax[0,1].axhline(y = 200, color = '000000', linewidth = 3)
 ax[0,1].axvline(x = 0, color = '000000', linewidth = 3)
 ax[0,1].axvline(x = 200, color = '000000', linewidth = 3)
-sns.heatmap(snapshot_3,cmap=sns.color_palette(palette,18),square=True,cbar=False,ax=ax[1,0],xticklabels=False, yticklabels=False, vmin=0,vmax=18)
+sns.heatmap(snapshot_3,square=True,cbar=False,ax=ax[1,0],xticklabels=False, yticklabels=False, vmin=0,vmax=18)
 ax[1,0].annotate("c)",(10,20))
 ax[1,0].axhline(y = 0, color = '000000', linewidth = 3)
 ax[1,0].axhline(y = 200, color = '000000', linewidth = 3)
 ax[1,0].axvline(x = 0, color = '000000', linewidth = 3)
 ax[1,0].axvline(x = 200, color = '000000', linewidth = 3)
-sns.heatmap(new_lattice,cmap=sns.color_palette(palette,18),square=True,cbar=False,ax=ax[1,1],xticklabels=False, yticklabels=False, vmin=0,vmax=18)
+sns.heatmap(spins,square=True,cbar=False,ax=ax[1,1],xticklabels=False, yticklabels=False, vmin=0,vmax=18)
 ax[1,1].annotate("d)",(10,20))
 ax[1,1].axhline(y = 0, color = '000000', linewidth = 3)
 ax[1,1].axhline(y = 200, color = '000000', linewidth = 3)
