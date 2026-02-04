@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<ProfilingTarget xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <ProjectTarget>
+    <TargetProject>1dbb79d9-d1ca-4b62-8946-788d9939c4e2</TargetProject>
+    <FriendlyName>Protrusion Models</FriendlyName>
+  </ProjectTarget>
+  <Reports>
+    <Report>
+      <Filename>C:\Users\WINDOWS11\AppData\Local\Temp\Protrusion Models_20260202.vsp</Filename>
+    </Report>
+  </Reports>
+  <UseVTune>false</UseVTune>
+</ProfilingTarget>

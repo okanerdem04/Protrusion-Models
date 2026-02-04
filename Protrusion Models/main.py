@@ -2,16 +2,25 @@
 from hmac import new
 import numpy as np
 import pandas as pd
+import dask.dataframe as dd 
 import matplotlib.pyplot as plt
 import matplotlib.animation
 import random
 import seaborn as sns
 import colorcet as cc
 import numba
+import timeit
+import tracemalloc
+import h5py
 # homemade functions
 from gen_lattice import gen_lattice
 from calc_hamiltonian import calc_hamiltonian, neighbors
 from protrusion_growth import center_of_mass, find_nearest_protrusion, protrusion_growth
+
+t1 = timeit.default_timer()
+tracemalloc.start()
+init_memory = tracemalloc.get_traced_memory()
+
 
 # starting variables:
 width = 100             # width of lattice
@@ -28,8 +37,8 @@ Jt = 1
 protrusion_density = 0.1
 
 # create two 2d arrays to store all lattice info; one array stores each pixel's spin value, the other stores their compartment value
-spins = np.zeros((width,height),dtype=np.int64)
-compartments = np.zeros((width,height),dtype=np.int64)
+spins = np.zeros((width,height),dtype=np.int16)
+compartments = np.zeros((width,height),dtype=np.int16)
 
 cell_id = np.array(range(1,num_cells+1)) # cell index array to store all unique spins
 # random.shuffle(cell_id) # this is literally just done to get nicer colours
@@ -48,11 +57,27 @@ for i in range(num_cells):
 
 # calculate the value for the total number of sweeps, based on the size of the lattice
 sweep = np.prod(spins.shape)
-budding_sweeps = 0*sweep
-protrusion_sweeps = 100*sweep
+budding_sweeps = 10*sweep
+protrusion_sweeps = 10*sweep
+
+# create arrays to store all timesteps for every sweep, this is to allow us to export to a file later
+exp_spins = np.zeros((sweep+1,width,height),dtype=np.int16)
+exp_comps = np.zeros((sweep+1,width,height),dtype=np.int16)
+
+# create a h5py file with datasets for spins and compartments
+f = h5py.File("test.hdf5", "a")
+dsetspins = f.create_dataset("test spins", (budding_sweeps+protrusion_sweeps+1,width,height), dtype=np.int16, compression="gzip")
+dsetcomps = f.create_dataset("test compartments", (budding_sweeps+protrusion_sweeps+1,width,height), dtype=np.int16, compression="gzip")
+# also create two counter variables to keep track of the total timesteps and the timestep for the current sweep
+stepsweep = 0
+steptot = 0
 
 def run_mc(total_sweeps): # run the Monte Carlo simulation over the total number of sweeps
-    for i in range(total_sweeps):
+    # define global variables to count total steps and steps per sweep
+    global stepsweep
+    global steptot
+
+    for i in range(total_sweeps+1):
         # select a random position
         x = random.randint(0,width-1)
         y = random.randint(0,height-1)
@@ -132,6 +157,28 @@ def run_mc(total_sweeps): # run the Monte Carlo simulation over the total number
             global snapshot_3
             snapshot_3 = np.copy(spins)
 
+        # save current step to the big 3d array to later be exported
+        exp_spins[stepsweep] = np.copy(spins)
+        exp_comps[stepsweep] = np.copy(compartments)
+
+
+        # if our current stepsweep value is exactly at the end of a sweep, we append it to a .npy file
+        if stepsweep == width*height:
+            t1 = timeit.default_timer()
+            '''dsetspins[steptot-(width*height):steptot-1] = exp_spins[0:width*height-1]
+            dsetspins.flush()
+            dsetcomps[steptot-(width*height):steptot-1] = exp_comps[0:width*height-1]
+            dsetcomps.flush()'''
+            t2 = timeit.default_timer()
+            print(f"Time taken to copy into dset is {t2-t1} sec")
+            stepsweep = 0
+
+        # increment the total step and sweep step counters
+        stepsweep += 1
+        steptot += 1
+
+
+
 # run the Monte Carlo simulation without any protrusion cells for a certain amount of sweeps
 run_mc(budding_sweeps)
 
@@ -145,24 +192,27 @@ for i in range(width):
             if buried != 0:
                 compartments[i][j] = 2
 
-# take a snapshot of lattice after this
-snapshot_1 = np.copy(spins)
-
 # run the MC simulation again, this time with protrusion cells in the mix
 run_mc(protrusion_sweeps)
 
+# read the snapshot of the other lattice stored in test.hdf5
+f2 = h5py.File("test.hdf5", "r")
+snapshot = f2['test spins'][200000-2]
+
+print(f"Starting memory is ",init_memory)
+print(tracemalloc.get_traced_memory())
 palette = ["#ffffff", "#ffffff", "#ffffff", "#000000", "#999999", "#555555", "#000000", "#999999", "#555555", "#000000", "#999999", "#555555", "#000000", "#999999", "#555555", "#000000", "#999999", "#555555"]
 
 # plot the final lattice
 fig, ax = plt.subplots(2,2)
-sns.heatmap(snapshot_1,square=True,cbar=False,ax=ax[0,0],xticklabels=False, yticklabels=False, vmin=0,vmax=18)
-ax[0,0].annotate("a)",(10,20))
+sns.heatmap(snapshot,square=True,cbar=False,ax=ax[0,0],xticklabels=False, yticklabels=False, vmin=0,vmax=5)
+ax[0,0].annotate("Five cells spins (stored in test.hdf5)",(0,0))
 ax[0,0].axhline(y = 0, color = '000000', linewidth = 3)
 ax[0,0].axhline(y = 200, color = '000000', linewidth = 3)
 ax[0,0].axvline(x = 0, color = '000000', linewidth = 3)
 ax[0,0].axvline(x = 200, color = '000000', linewidth = 3)
-sns.heatmap(snapshot_2,square=True,cbar=False,ax=ax[0,1],xticklabels=False, yticklabels=False, vmin=0,vmax=18)
-ax[0,1].annotate("b)",(10,20))
+'''sns.heatmap(snapshot_1,square=True,cbar=False,ax=ax[0,1],xticklabels=False, yticklabels=False, vmin=0,vmax=18)
+ax[0,1].annotate("One cell spin (stored in test2.hdf5)",(0,0))
 ax[0,1].axhline(y = 0, color = '000000', linewidth = 3)
 ax[0,1].axhline(y = 200, color = '000000', linewidth = 3)
 ax[0,1].axvline(x = 0, color = '000000', linewidth = 3)
@@ -178,7 +228,7 @@ ax[1,1].annotate("d)",(10,20))
 ax[1,1].axhline(y = 0, color = '000000', linewidth = 3)
 ax[1,1].axhline(y = 200, color = '000000', linewidth = 3)
 ax[1,1].axvline(x = 0, color = '000000', linewidth = 3)
-ax[1,1].axvline(x = 200, color = '000000', linewidth = 3)
+ax[1,1].axvline(x = 200, color = '000000', linewidth = 3)'''
 
 plt.tight_layout()
 plt.show()
