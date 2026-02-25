@@ -35,25 +35,26 @@ def adhesion_energy(spins,compartments,width,height,x,y,Jt): # for a given latti
     energy = 0
 
     for nx, ny in neighbors(x,y,width,height):
-        # check to make sure we're comparing different cells, or different compartments of the same cell
-        if spins[nx, ny] != spins[x,y] or compartments[nx, ny] != compartments[x,y]:
-            # if neither of them are backgrounds...
-            if spins[nx, ny] != 0 and spins[x,y] != 0:
-                # if the connection is between a body and protrusion, instead decrease energy by a lot
-                if (compartments[nx,ny]==1 and compartments[x,y]!=1) or (compartments[nx,ny]==1 and compartments[x,y]!=1):
-                    energy -= Jt
-                # if it is not, this is a cell-cell or protrusion-protrusion interaction, neither of which we care about yet
-                else:
-                    energy += 1
-            # otherwise, do the adhesion between background and other cells
-            else:
-                energy += 1
+        comp_tuple = (compartments[x,y],compartments[nx, ny])
+
+        if comp_tuple == (0,1) or comp_tuple == (1,0): # cell body and background interaction
+            energy += 1
+        elif comp_tuple == (1,1) and (spins[x,y] != spins[nx,ny]): # both cell body, different spin
+            energy += 1
+        elif comp_tuple == (1,3) or comp_tuple == (3,1): # cell body, inactive protrusion
+            energy += Jt
+        else:
+            pass
 
     # return the number of neighbours belonging to different cells
     return energy
 
 @numba.njit
-def calc_hamiltonian(spins,compartments,width,height,num_cells,area_coeff,a0,adhesion_coeff,protrusion_coeff,p0,Jt,x,y): # calculate the overall Hamiltonian function of the lattice
+def signal_energy(signals,x,y):
+    return signals[x,y]
+
+@numba.njit
+def calc_hamiltonian(spins,compartments,signals,width,height,num_cells,area_coeff,a0,adhesion_coeff,protrusion_coeff,p0,Jt,x,y,nx,ny): # calculate the overall Hamiltonian function of the lattice
     # inputs: 2d npArray lattice, 1d npArray cell_id, int width, int height, int num_cells, int area_coeff, int a0, int adhesion_coeff, int protrusion_coeff, int p0, int x, int y
     ham = 0
 
@@ -72,8 +73,9 @@ def calc_hamiltonian(spins,compartments,width,height,num_cells,area_coeff,a0,adh
     print(f"adhesion energy total {adhesion}")
     ham += adhesion_coeff*adhesion
 
+    # find the signal energy if the selected point is a protrusion tip
+    if compartments[nx,ny] == 2:
+        ham -= signal_energy(signals,nx,ny) # nx and ny are used here to account for the tip moving between steps
+
     # return the total Hamiltonian of the system
     return ham
-
-
-
