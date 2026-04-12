@@ -1,8 +1,0 @@
-cpu-bind=MASK - bp1-compute049, task  0  0 [270819]: mask 0x1000001 set
-cpu-bind=MASK - bp1-compute049, task  0  0 [270820]: mask 0x4000004 set
-This jobs runs on the following machine:
-This jobs runs on the following machine:
-bp1-compute049
-bp1-compute049
-
-
