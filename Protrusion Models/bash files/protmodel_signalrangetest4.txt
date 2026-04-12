@@ -1,0 +1,15 @@
+cpu-bind=MASK - bp1-compute016, task  0  0 [2420874]: mask 0x40000004000 set
+This jobs runs on the following machine:
+bp1-compute016
+
+Traceback (most recent call last):
+  File "/user/home/dq22148/protrusion_models/./main.py", line 99, in <module>
+    dsetspins = f.create_dataset("test spins", ((budding_sweeps/sweep)+(protrusion_sweeps/sweep)+1,width,height), dtype=np.int16, compression="gzip")
+  File "/user/work/dq22148/miniforge3/lib/python3.13/site-packages/h5py/_hl/group.py", line 193, in create_dataset
+    dsid = dataset.make_new_dset(group, shape, dtype, data, name, **kwds)
+  File "/user/work/dq22148/miniforge3/lib/python3.13/site-packages/h5py/_hl/dataset.py", line 177, in make_new_dset
+    dset_id = h5d.create(parent.id, name, tid, sid, dcpl=dcpl, dapl=dapl)
+  File "h5py/_objects.pyx", line 54, in h5py._objects.with_phil.wrapper
+  File "h5py/_objects.pyx", line 55, in h5py._objects.with_phil.wrapper
+  File "h5py/h5d.pyx", line 134, in h5py.h5d.create
+ValueError: Unable to synchronously create dataset (name already exists)

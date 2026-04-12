@@ -1,0 +1,16 @@
+cpu-bind=MASK - bp1-compute066, task  0  0 [1701737]: mask 0x1000001 set
+This jobs runs on the following machine:
+bp1-compute066
+
+Traceback (most recent call last):
+  File "/user/home/dq22148/protrusion_models/./1000x1000_main.py", line 79, in <module>
+    f = h5py.File(sys.argv[7], "a")
+  File "/user/work/dq22148/miniforge3/lib/python3.13/site-packages/h5py/_hl/files.py", line 566, in __init__
+    fid = make_fid(name, mode, userblock_size, fapl, fcpl, swmr=swmr)
+  File "/user/work/dq22148/miniforge3/lib/python3.13/site-packages/h5py/_hl/files.py", line 253, in make_fid
+    fid = h5f.open(name, h5f.ACC_RDWR, fapl=fapl)
+  File "h5py/_objects.pyx", line 54, in h5py._objects.with_phil.wrapper
+  File "h5py/_objects.pyx", line 55, in h5py._objects.with_phil.wrapper
+  File "h5py/h5f.pyx", line 104, in h5py.h5f.open
+OSError: Unable to synchronously open file (bad object header version number)
+slurmstepd: error: *** JOB 16227210 ON bp1-compute059 CANCELLED AT 2026-03-07T13:35:46 DUE TO TIME LIMIT ***

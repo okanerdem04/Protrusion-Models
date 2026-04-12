@@ -70,7 +70,6 @@ def calc_hamiltonian(spins,compartments,signals,width,height,num_cells,area_coef
     # find the adhesion energy around one point, based on alpha
     # this does *not* find the total adhesion energy, as that takes much longer to calculate and we're only interested in the changes of energy when swapping one point
     adhesion = adhesion_energy(spins,compartments,width,height,x,y,Jt)
-    print(f"adhesion energy total {adhesion}")
     ham += adhesion_coeff*adhesion
 
     # find the signal energy if the selected point is a protrusion tip

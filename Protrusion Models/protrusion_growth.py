@@ -27,6 +27,68 @@ def center_of_mass(spins,compartments,width,height,ind): # find the position of 
     # return the center of mass indices as a list
     return [com_x, com_y]
 
+
+@numba.njit
+def gaussian_2d(radius,stdev,amplitude): # generate a gaussian circle 2d array of a given radius, standard deviation and amplitude
+    # generate x and y indices for the given radius
+    xs = np.arange(-radius,+radius,1)
+    ys = np.arange(-radius,+radius,1)
+    # the ys array must be reshaped to consist of only columns for this to work
+    ys = np.reshape(ys,(-1,1))
+
+    gauss = amplitude * np.exp(-(((xs)**2 / (2*stdev**2)) + (ys)**2 / ((2*stdev**2))))
+    return gauss
+
+def calculate_signals(spins,compartments,width,height,ind,radius,stdev,amplitude): # place gaussian circles on each protrusion tip belonging to a different spin than id
+    signals = np.zeros((width,height),dtype=float)
+
+    # get the indices of every other protrusion tip
+    masked_lattice = np.zeros((width,height),dtype=int)
+    masked_lattice[compartments == 2] = 1
+    masked_lattice[spins == ind] = 0
+
+    # find the total number of non-zero indices and each of their x- and y-positions
+    num_ones = np.count_nonzero(masked_lattice)
+    indices = np.nonzero(masked_lattice)
+
+    # create the gaussian circle lattice
+    gauss = gaussian_2d(width//2,stdev//2,amplitude)
+
+    # go through each of the indices, place a gaussian circle there
+    for i in range(num_ones):
+        # get center indices
+        xn = indices[0][i]
+        yn = indices[1][i]
+        # place the gaussian circle at the correct indices
+        circ_rows = np.arange(xn-(width//2),xn+(width//2)) % width
+        circ_cols = np.arange(yn-(width//2),yn+(width//2)) % height
+        np.add.at(signals,np.ix_(circ_rows, circ_cols),gauss)
+
+        # also make the four neighbouring lattice sites have a much higher signal strength; this is to allow protrusion tips to connect
+        for nx, ny in neighbors(xn,yn,width,height):
+            signals[nx,ny] += 5
+
+    # place a negative signal at the selected protrusion's soma center of mass
+    if(ind != 0):
+        gauss = gaussian_2d(width//2,24,50)
+        ix = center_of_mass(spins,compartments,width,height,ind) # round the center of mass positions to an int
+        ix = np.round(ix).astype(int)
+        # place the gaussian circle at the correct indices
+        circ_rows = np.arange(ix[0]-(width//2),ix[0]+(width//2)) % width
+        circ_cols = np.arange(ix[1]-(width//2),ix[1]+(width//2)) % height
+        np.subtract.at(signals,np.ix_(circ_rows, circ_cols),gauss)
+
+    return signals
+
+
+
+
+# THE FUNCTIONS BELOW THIS POINT ARE LEGACY AND NOT USED ANY MORE
+# .
+# .
+# .
+
+# legacy function to find nearest protrusions from a point
 def find_nearest_protrusion(spins,compartments,width,height,x,y,ind): # find the indices of the closest protrusion pixel not belonging to a given id
     # inputs: 2d npArray lattice, int width, int height, int x, int y, int ind
 
@@ -73,56 +135,8 @@ def find_nearest_protrusion(spins,compartments,width,height,x,y,ind): # find the
     nearest_y = y_ind - y
     return [nearest_x,nearest_y,d] # note that if there are no other protrusion points, this returns [0,0,9999999]; large distance should prevent any errors from this
 
-@numba.njit
-def gaussian_2d(radius,stdev,amplitude): # generate a gaussian circle 2d array of a given radius, standard deviation and amplitude
-    # generate x and y indices for the given radius
-    xs = np.arange(-radius,+radius,1)
-    ys = np.arange(-radius,+radius,1)
-    # the ys array must be reshaped to consist of only columns for this to work
-    ys = np.reshape(ys,(-1,1))
 
-    gauss = amplitude * np.exp(-(((xs)**2 / (2*stdev**2)) + (ys)**2 / ((2*stdev**2))))
-    return gauss
-
-def calculate_signals(spins,compartments,width,height,ind,radius,stdev,amplitude): # place gaussian circles on each protrusion tip belonging to a different spin than id
-    signals = np.zeros((width,height),dtype=float)
-
-    # get the indices of every other protrusion tip
-    masked_lattice = np.zeros((width,height),dtype=int)
-    masked_lattice[compartments == 2] = 1
-    masked_lattice[spins == ind] = 0
-
-    # find the total number of non-zero indices and each of their x- and y-positions
-    num_ones = np.count_nonzero(masked_lattice)
-    indices = np.nonzero(masked_lattice)
-
-    # create the gaussian circle lattice
-    gauss = gaussian_2d(radius//2,stdev//2,amplitude)
-
-    # go through each of the indices, place a gaussian circle there
-    for i in range(num_ones):
-        # get center indices
-        xn = indices[0][i]
-        yn = indices[1][i]
-        # place the gaussian circle at the correct indices
-        circ_rows = np.arange(xn-(radius//2),xn+(radius//2)) % width
-        circ_cols = np.arange(yn-(radius//2),yn+(radius//2)) % height
-        np.add.at(signals,np.ix_(circ_rows, circ_cols),gauss)
-        # also make the four neighbouring lattice sites have a much higher signal strength; this is to allow protrusion tips to connect
-        for nx, ny in neighbors(xn,yn,width,height):
-            signals[nx,ny] += 5
-
-    # place a negative signal at the selected protrusion's soma center of mass
-    gauss = gaussian_2d(radius,stdev,amplitude)
-    ix = np.rint(center_of_mass(spins,compartments,width,height,ind)).astype(int) # round the center of mass positions to an int
-    # place the gaussian circle at the correct indices
-    circ_rows = np.arange(ix[0]-(radius),ix[0]+(radius)) % width
-    circ_cols = np.arange(ix[1]-(radius),ix[1]+(radius)) % height
-    np.subtract.at(signals,np.ix_(circ_rows, circ_cols),gauss)
-
-    return signals
-
-
+# legacy function to do protrusion growth on a tip 
 def protrusion_growth(spins,compartments,width,height,x,y,d): # model the growth of a protrusion point
     # inputs: 2d npArray lattice, int width, int height, int x, int y, int protrusion_id, int d
 

@@ -1,0 +1,4 @@
+cpu-bind=MASK - bp1-compute061, task  0  0 [441869]: mask 0x80000080000 set
+This jobs runs on the following machine:
+bp1-compute061
+

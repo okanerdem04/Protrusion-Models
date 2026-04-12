@@ -1,4 +1,4 @@
-# standard libraries
+﻿# standard libraries
 from hmac import new
 import numpy as np
 import pandas as pd
@@ -11,6 +11,9 @@ import numba
 import timeit
 import tracemalloc
 import skimage as ski
+import h5py
+import sys
+import time
 # homemade functions
 from gen_lattice import gen_lattice
 from calc_hamiltonian import calc_hamiltonian, neighbors
@@ -21,21 +24,28 @@ tracemalloc.start()
 init_memory = tracemalloc.get_traced_memory()
 
 
-# starting variables:
-width = 160             # width of lattice
-height = 160            # height of lattice
-num_cells = 16           # number of unique cells
-target_area = 100       # target area of the body of cells
-target_prot = 200       # target area of the protrusions of cells
-alpha = 2               # surface tension coefficient
-lambd = 1               # area constraint coefficient
-mu = 0                  # protrusion constraint coefficient
-Jt = -2                  # protrusion-body adhesion coefficient
-signal_strength = 100   # strength of signal from protrusion tips
-signal_range = 20       # range of signal from protrusion tips
 
-# probability for the likelihood of a cell body being replaced by a protrusion (1 is guaranteed, 0 is never)
-protrusion_density = 0.1
+# starting variables:
+width = 100             # width of lattice
+height = 100            # height of lattice
+num_cells = 16           # number of unique cells
+target_area = 175       # target area of the body of cells
+target_prot = 200       # target area of the protrusions of cells
+alpha = 0.5             # surface tension coefficient
+lambd = 0.5             # area constraint coefficient
+mu = 0                  # protrusion constraint coefficient
+Jt = -3                 # protrusion-body adhesion coefficient
+signal_strength = 50    # strength of signal from protrusion tips
+signal_range = 24       # range of signal from protrusion tips
+
+if(len(sys.argv) > 1): # handle input from command line
+    target_area = int(sys.argv[1])
+    alpha = float(sys.argv[2])
+    lambd = float(sys.argv[3])
+    signal_strength = int(sys.argv[4])
+    signal_range = int(sys.argv[5])
+    width = int(sys.argv[9])
+    height = int(sys.argv[9])
 
 # create two 2d arrays to store all lattice info; one array stores each pixel's spin value, the other stores their compartment value
 spins = np.zeros((width,height),dtype=np.int16)
@@ -47,25 +57,11 @@ cell_id = np.array(range(1,num_cells+1)) # cell index array to store all unique 
 # random.shuffle(cell_id) # this is literally just done to get nicer colours
 
 # set up initial cells on the spin array
-spins[20:30,20:30]   = cell_id[0]
-spins[60:70,20:30]   = cell_id[1]
-spins[100:110,20:30] = cell_id[2]
-spins[140:150,20:30] = cell_id[3]
-
-spins[20:30,60:70]   = cell_id[4]
-spins[60:70,60:70]   = cell_id[5]
-spins[100:110,60:70] = cell_id[6]
-spins[140:150,60:70] = cell_id[7]
-
-spins[20:30,100:110]   = cell_id[8]
-spins[60:70,100:110]   = cell_id[9]
-spins[100:110,100:110] = cell_id[10]
-spins[140:150,100:110] = cell_id[11]
-
-spins[20:30,140:150]   = cell_id[12]
-spins[60:70,140:150]   = cell_id[13]
-spins[100:110,140:150] = cell_id[14]
-spins[140:150,140:150] = cell_id[15]
+for i in range(4):
+    for j in range(4):
+        x = round((width/4)*i+(width/8))
+        y = round((height/4)*j+(height/8))
+        spins[x-6:x+6,y-6:y+6] = cell_id[(i*4)+j]
 
 # assigns each of the x/y coords that exist on the spin array a compartment value of 1 (body)
 for i in range(num_cells):
@@ -74,16 +70,23 @@ for i in range(num_cells):
 # calculate the value for the total number of sweeps, based on the size of the lattice
 sweep = np.prod(spins.shape)
 budding_sweeps = 20*sweep
-protrusion_sweeps = 100*sweep
+protrusion_sweeps = 200*sweep
+if(len(sys.argv) > 6):
+    protrusion_sweeps = int(sys.argv[6])*sweep
 
 # create arrays to store all timesteps for every sweep, this is to allow us to export to a file later
 #exp_spins = np.zeros((sweep+1,width,height),dtype=np.int16)
 #exp_comps = np.zeros((sweep+1,width,height),dtype=np.int16)
 
 # create a h5py file with datasets for spins and compartments
-'''f = h5py.File("test.hdf5", "a")
-dsetspins = f.create_dataset("test spins", (budding_sweeps+protrusion_sweeps+1,width,height), dtype=np.int16, compression="gzip")
-dsetcomps = f.create_dataset("test compartments", (budding_sweeps+protrusion_sweeps+1,width,height), dtype=np.int16, compression="gzip")'''
+if(len(sys.argv) > 7):
+    f = h5py.File(sys.argv[7], "a")
+    Jt = float(sys.argv[8])
+else:
+    f = h5py.File(f"test_singldsade_ceall1.out", "a")
+
+dsetspins = f.create_dataset("test spins", ((budding_sweeps/sweep)+(protrusion_sweeps/sweep)+1,width,height), dtype=np.int16, compression="gzip")
+dsetcomps = f.create_dataset("test compartments", ((budding_sweeps/sweep)+(protrusion_sweeps/sweep)+1,width,height), dtype=np.int16, compression="gzip")
 # also create two counter variables to keep track of the total timesteps and the timestep for the current sweep
 stepsweep = 0
 steptot = 0
@@ -118,7 +121,6 @@ def run_mc(total_sweeps): # run the Monte Carlo simulation over the total number
 
             # find the energy change
             energy_change = new_ham - old_ham
-            print(f"energy_change {energy_change}")
 
             # if the energy is increased, revert the change with a probability that is proportional to the increase in energy
             if energy_change > 0:
@@ -126,7 +128,6 @@ def run_mc(total_sweeps): # run the Monte Carlo simulation over the total number
                 if random.random() > prob:
                     spins[x,y] = og_spin
                     compartments[x,y] = og_compartment
-                    print("change reverted")
 
         # this section of the simulation handles the growth and energy of protrusion tip
         # check to see if the neighbouring lattice point is a protrusion tip and that the selected point is not a protrusion
@@ -134,9 +135,9 @@ def run_mc(total_sweeps): # run the Monte Carlo simulation over the total number
             # find all of the signals for other spins
             signals = calculate_signals(spins,compartments,width,height,spins[Nx,Ny],signal_range,signal_range/2,signal_strength)
 
-            # if the protrusion tip is not in a field (its signal strength is zero) we do nothing
-            if signals[Nx,Ny] == 0:
-                print("MC step passed because of no field")
+            # if the protrusion tip is not in a field (its signal strength is close to zero) we do nothing
+            if signals[Nx,Ny] <= 0.1 and signals[Nx,Ny] >= -0.1:
+                pass
             
             # otherwise, do the usual logic of replacing a neighbour and comparing energies
             else:
@@ -153,7 +154,6 @@ def run_mc(total_sweeps): # run the Monte Carlo simulation over the total number
 
                 # find the energy change
                 energy_change = new_ham - old_ham
-                print(f"energy_change {energy_change}")
 
                 # if the energy is increased, revert the change with a probability that is proportional to the increase in energy
                 if energy_change > 0:
@@ -162,83 +162,99 @@ def run_mc(total_sweeps): # run the Monte Carlo simulation over the total number
                         spins[x,y] = og_spin
                         compartments[x,y] = og_compartment
                         compartments[Nx,Ny] -= 1
-                        print("change reverted")
 
-        '''# save current step to the big 3d array to later be exported
-        exp_spins[stepsweep] = np.copy(spins)
-        exp_comps[stepsweep] = np.copy(compartments)
-
-
-        # if our current stepsweep value is exactly at the end of a sweep, we append it to a .npy file
-        if stepsweep == width*height:
-            t1 = timeit.default_timer()
-            dsetspins[steptot-(width*height):steptot-1] = exp_spins[0:width*height-1]
+        # if our current steptot value is exactly at the end of a sweep, we append the current spins, compartments to the file
+        if steptot == sweep:
+            dsetspins[stepsweep] = spins
             dsetspins.flush()
-            dsetcomps[steptot-(width*height):steptot-1] = exp_comps[0:width*height-1]
+            dsetcomps[stepsweep] = compartments
             dsetcomps.flush()
-            t2 = timeit.default_timer()
-            print(f"Time taken to copy into dset is {t2-t1} sec")
-            stepsweep = 0
+            print(f"Reached the final step of sweep ",stepsweep)
+            stepsweep += 1
+            steptot = 0
 
         # increment the total step and sweep step counters
-        stepsweep += 1
-        steptot += 1'''
-
-
+        steptot += 1
 
 # run the Monte Carlo simulation without any protrusion cells for a certain amount of sweeps
 run_mc(budding_sweeps)
 
-# introduce protrusion points to the cells after running MC for a while
-for i in range(width):
-    for j in range(height):
-        if spins[i][j] != 0 and random.random() < protrusion_density and compartments[i][j] == 1:
-            buried = 0
-            for nx, ny in neighbors(i,j,width,height):
-                buried += (spins[nx][ny] != spins[i][j] and compartments[nx][ny] != compartments[i][j])
-            if buried != 0:
-                compartments[i][j] = 2
+# introduce protrusion tips based on the contours of cells
+contours = ski.measure.find_contours(compartments)
+for contour in contours:
+    # set a number of tips with slight randomness
+    num_tips = 5
+    num_tips = round(random.gauss(num_tips,1))
+
+    # get evenly spaced indices for the number of protrusion tips
+    length = len(contour[:,0])
+    ix = np.linspace(0,length-1,num=num_tips+1,dtype=int)
+    ix = np.delete(ix,len(ix)-1) # we remove the final element of this array since it gives an equal position to the first
+
+    for i in ix:
+        i = round(random.gauss(i,2.5)) # introduce a slight amount of noise to the position
+        x = round(contour[i,0])
+        y = round(contour[i,1])
+        compartments[x,y] = 2
+        # if the selected position currently doesn't belong to a cell, set its spin to the highest value of its neighbours
+        if spins[x,y] == 0:
+            for nx, ny in neighbors(x,y,width,height):
+                if spins[nx,ny] > spins[x,y]:
+                    spins[x,y] = spins[nx,ny]
 
 # run the MC simulation again, this time with protrusion cells in the mix
 run_mc(protrusion_sweeps)
 
-# read the snapshot of the other lattice stored in test.hdf5
-'''f2 = h5py.File("test.hdf5", "r")
-snapshot = f2['test spins'][200000-2]'''
-
-
-print(f"Starting memory is ",init_memory)
-print(tracemalloc.get_traced_memory())
-palette = ["#ffffff", "#ffffff", "#ffffff", "#000000", "#999999", "#555555", "#000000", "#999999", "#555555", "#000000", "#999999", "#555555", "#000000", "#999999", "#555555", "#000000", "#999999", "#555555"]
-
-signals = calculate_signals(spins,compartments,width,height,0,signal_range,signal_range/2,signal_strength)
+#palette = (sns.color_palette("pastel",17).as_hex())
+#palette[0] = "#000000"
+palette = ["#000000","#ffffff","#bbbbbb","#bbbbbb"]
 
 # plot the final lattice
-fig, ax = plt.subplots(2,2)
-sns.heatmap(spins,square=True,cbar=False,ax=ax[0,0],xticklabels=False, yticklabels=False)
-ax[0,0].annotate("Spins of the lattice",(0,0))
-ax[0,0].axhline(y = 0, color = '000000', linewidth = 3)
-ax[0,0].axhline(y = 200, color = '000000', linewidth = 3)
-ax[0,0].axvline(x = 0, color = '000000', linewidth = 3)
-ax[0,0].axvline(x = 200, color = '000000', linewidth = 3)
-sns.heatmap(compartments,square=True,cbar=False,ax=ax[0,1],xticklabels=False, yticklabels=False)
-ax[0,1].annotate("Compartments of the lattice",(0,0))
+fig, ax = plt.subplots()
+
+sns.heatmap(spins,square=True,cbar=False,xticklabels=False, yticklabels=False)
+ax.annotate("a) Snapshot of the final system",(-10,1000),annotation_clip=False )
+ax.axhline(y = 0, color = '000000', linewidth = 3)
+ax.axhline(y = 100, color = '000000', linewidth = 3)
+ax.axvline(x = 0, color = '000000', linewidth = 3)
+ax.axvline(x = 100, color = '000000', linewidth = 3)
+
+'''fig, ax = plt.subplots(1,4)
+sns.heatmap(t1,square=True,cbar=False,ax=ax[0],xticklabels=False, yticklabels=False,cmap=palette)
+ax[0].annotate("a) Snapshot of the final system of range = 50 pixels",(-20,220),annotation_clip=False )
+ax[0].axhline(y = 0, color = '000000', linewidth = 3)
+ax[0].axhline(y = 200, color = '000000', linewidth = 3)
+ax[0].axvline(x = 0, color = '000000', linewidth = 3)
+ax[0].axvline(x = 200, color = '000000', linewidth = 3)
+sns.heatmap(t2,square=True,cbar=False,ax=ax[1],xticklabels=False, yticklabels=False,cmap=palette)
+ax[1].annotate("b) Snapshot of the final system of range = 25 pixels",(-20,220),annotation_clip=False )
+ax[1].axhline(y = 0, color = '000000', linewidth = 3)
+ax[1].axhline(y = 200, color = '000000', linewidth = 3)
+ax[1].axvline(x = 0, color = '000000', linewidth = 3)
+ax[1].axvline(x = 200, color = '000000', linewidth = 3)
+sns.heatmap(t3,square=True,cbar=False,ax=ax[2],xticklabels=False, yticklabels=False,cmap=palette)
+ax[2].annotate("b) Snapshot of the final system of range = 20 pixels",(-20,220),annotation_clip=False )
+ax[2].axhline(y = 0, color = '000000', linewidth = 3)
+ax[2].axhline(y = 200, color = '000000', linewidth = 3)
+ax[2].axvline(x = 0, color = '000000', linewidth = 3)
+ax[2].axvline(x = 200, color = '000000', linewidth = 3)
+sns.heatmap(t4,square=True,cbar=False,ax=ax[3],xticklabels=False, yticklabels=False,cmap=palette)
+ax[3].annotate("c) Snapshot of the final system of range = 10 pixels",(-20,220),annotation_clip=False )
+ax[3].axhline(y = 0, color = '000000', linewidth = 3)
+ax[3].axhline(y = 200, color = '000000', linewidth = 3)
+ax[3].axvline(x = 0, color = '000000', linewidth = 3)
+ax[3].axvline(x = 200, color = '000000', linewidth = 3)'''
+
+'''for contour in contours:
+    ax[0,1].plot(contour[:,1],contour[:,0])
+ax[0,1].set_xlim([0,200])
+ax[0,1].set_ylim([200,0])
+ax[0,1].annotate("Filtered image",(0,0))
+ax[0,1].set_box_aspect(1)
 ax[0,1].axhline(y = 0, color = '000000', linewidth = 3)
 ax[0,1].axhline(y = 200, color = '000000', linewidth = 3)
 ax[0,1].axvline(x = 0, color = '000000', linewidth = 3)
-ax[0,1].axvline(x = 200, color = '000000', linewidth = 3)
-sns.heatmap(signals,square=True,cbar=False,ax=ax[1,0],xticklabels=False, yticklabels=False)
-ax[1,0].annotate("Signal strength of the lattice",(0,0))
-ax[1,0].axhline(y = 0, color = '000000', linewidth = 3)
-ax[1,0].axhline(y = 200, color = '000000', linewidth = 3)
-ax[1,0].axvline(x = 0, color = '000000', linewidth = 3)
-ax[1,0].axvline(x = 200, color = '000000', linewidth = 3)
-'''sns.heatmap(spins,square=True,cbar=False,ax=ax[1,1],xticklabels=False, yticklabels=False, vmin=0,vmax=18)
-ax[1,1].annotate("d)",(10,20))
-ax[1,1].axhline(y = 0, color = '000000', linewidth = 3)
-ax[1,1].axhline(y = 200, color = '000000', linewidth = 3)
-ax[1,1].axvline(x = 0, color = '000000', linewidth = 3)
-ax[1,1].axvline(x = 200, color = '000000', linewidth = 3)'''
+ax[0,1].axvline(x = 200, color = '000000', linewidth = 3)'''
 
 plt.tight_layout()
 plt.show()

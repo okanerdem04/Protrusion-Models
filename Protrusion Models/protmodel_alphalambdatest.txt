@@ -1,0 +1,12 @@
+cpu-bind=MASK - bp1-compute056, task  0  0 [1825275]: mask 0x4000004 set
+This jobs runs on the following machine:
+bp1-compute056
+
+/tmp/slurmd/job16227545/slurm_script: line 22: syntax error near unexpected token `('
+/tmp/slurmd/job16227545/slurm_script: line 22: `$alpha = (${SLURM_ARRAY_TASK_ID} - 100 % 8 * 0.5) + 0.5'
+cpu-bind=MASK - bp1-compute056, task  0  0 [1825274]: mask 0x10000010 set
+This jobs runs on the following machine:
+bp1-compute056
+
+/tmp/slurmd/job16227546/slurm_script: line 22: syntax error near unexpected token `('
+/tmp/slurmd/job16227546/slurm_script: line 22: `$alpha = (${SLURM_ARRAY_TASK_ID} - 100 % 8 * 0.5) + 0.5'

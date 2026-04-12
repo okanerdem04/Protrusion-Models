@@ -1,0 +1,29 @@
+cpu-bind=MASK - bp1-compute132, task  0  0 [1463985]: mask 0x4000000040 set
+This jobs runs on the following machine:
+bp1-compute132
+
+Reached the final step of sweep  0
+Reached the final step of sweep  1
+Reached the final step of sweep  2
+Reached the final step of sweep  3
+Reached the final step of sweep  4
+Reached the final step of sweep  5
+Reached the final step of sweep  6
+Reached the final step of sweep  7
+Reached the final step of sweep  8
+Reached the final step of sweep  9
+Reached the final step of sweep  10
+Reached the final step of sweep  11
+Reached the final step of sweep  12
+Reached the final step of sweep  13
+Reached the final step of sweep  14
+Reached the final step of sweep  15
+Reached the final step of sweep  16
+Reached the final step of sweep  17
+Reached the final step of sweep  18
+Reached the final step of sweep  19
+Traceback (most recent call last):
+  File "/user/home/dq22148/protrusion_models/./main.py", line 209, in <module>
+    x = round(contour[i,0])
+              ~~~~~~~^^^^^
+IndexError: index 15 is out of bounds for axis 0 with size 15
